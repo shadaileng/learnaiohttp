@@ -1,0 +1,5 @@
+*-project
+*-workspace
+venv/
+*/__pycache__/
+*.db
