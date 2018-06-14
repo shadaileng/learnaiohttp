@@ -15,6 +15,7 @@ Usage: python3 src/demo.py option
 	1 - client
 	2 - query string parameter
 	3 - json request and response
+	4 - stream response
 '''
 
 import aiohttp, asyncio, sys, json
@@ -34,6 +35,10 @@ async def client():
 		async with session.get('http://localhost:8080') as response:
 			print('status: %s' % response.status)
 			html = await response.text()
+			print(html)
+		async with session.get('http://localhost:8080') as response:
+			print('status: %s' % response.status)
+			html = await response.content.read()
 			print(html)
 
 def server():
@@ -65,9 +70,9 @@ async def querystring():
 			print(str(response.url))
 			assert str(response.url) == expect
 		# 元组数组方式拼接参数
-		params = [('key1', 'val1'), ('key2', 'val2')]
+		params = [('key1', 'val1'), ('key2', 'val2'), ('key2', 'val3')]
 		async with session.get('http://localhost:8080/querystring', params=params) as response:
-			expect = 'http://localhost:8080/querystring?key1=val1&key2=val2'
+			expect = 'http://localhost:8080/querystring?key1=val1&key2=val2&key2=val3'
 			print(str(response.url))
 			assert str(response.url) == expect
 		# 请求参数中包含特殊字符，禁用转码
@@ -89,7 +94,21 @@ async def json_():
 				print('status: %s' % response.status)
 				html = await response.text()
 				print(html)
-				
+
+async def streamrep():
+	async with aiohttp.ClientSession() as session:
+		async with session.get('http://localhost:8080') as response:
+			print('status: %s' % response.status)
+			size = 1024
+			with open('./tmp/localhost.html', 'wb') as file:
+				while True:
+					chunk = await response.content.read(size)
+					if not chunk:
+						break
+					print(chunk)
+					file.write(chunk)
+
+
 if __name__ == '__main__':
 	print(__doc__ % __author__)
 	argv = sys.argv[1:]
@@ -107,3 +126,5 @@ if __name__ == '__main__':
 			main(querystring)
 		elif option == '3':
 			main(json_)
+		elif option == '4':
+			main(streamrep)
