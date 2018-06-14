@@ -352,8 +352,98 @@ async with aiohttp.ClientSession(timeout=timeout) as session:
 	async with session.get(url, timeout=timeout) as resp:
 ```
 
+> 默认的超时对象
 
+```
+aiohttp.ClientTimeout(total=5*60, connect=None,
+                      sock_connect=None, sock_read=None)
+```
+- `total`: 整个操作时间包括连接建立，请求发送和响应读取
 
+- `connect`: 从池中获取连接的总超时时间。时间包括建立新连接的连接或等待池中的空闲连接
+
+- `sock_connect`: 新建连接的超时时间，而不是从连接池中取
+
+- `sock_read`: 最大允许读取超时时间
+
+---
+
+# 客户端高级应用
+
+## ClientSession
+
+> `ClientSession`是客户端`API`核心部分。
+
+> 首先创建`session`，使用该实例执行`HTTP`请求和初始化`WebSocket`连接
+
+> `session`包含`cookie`存储和连接池，因此同一个`session`中`HTTP`请求的`cookie`和连接是共享的
+
+## 自定义请求头
+
+> 通过将一个包含请求头信息的`dict`赋值给`headers`参数
+
+```
+url = 'http://example.com/image'
+payload = b'GIF89a\x01\x00\x01\x00\x00\xff\x00,\x00\x00'
+          b'\x00\x00\x01\x00\x01\x00\x00\x02\x00;'
+headers = {'content-type': 'image/gif'}
+
+await session.post(url, data=payload, headers=headers)
+```
+
+## 自定义cookies
+
+> 创建`session`时，将`cookies`信息以`dict`的形式赋值给`cookies`参数
+
+```
+url = 'http://httpbin.org/cookies'
+cookies = {'cookies_are': 'working'}
+async with ClientSession(cookies=cookies) as session:
+    async with session.get(url) as resp:
+        assert await resp.json() == {
+           "cookies": {"cookies_are": "working"}}
+```
+## Response中信息
+
+### headers
+
+> `response.headers`的值是`dict`形式的`headers`
+
+```
+assert resp.headers == {
+    'ACCESS-CONTROL-ALLOW-ORIGIN': '*',
+    'CONTENT-TYPE': 'application/json',
+    'DATE': 'Tue, 15 Jul 2014 16:49:51 GMT',
+    'SERVER': 'gunicorn/18.0',
+    'CONTENT-LENGTH': '331',
+    'CONNECTION': 'keep-alive'}
+```
+
+### cookies
+
+> `response.cookies`的值是`dict`形式的`cookies`
+
+```
+url = 'http://example.com/some/cookie/setting/url'
+async with session.get(url) as resp:
+    print(resp.cookies['example_cookie_name'])
+```
+
+### 转发历史
+
+> 如果请求是转发的，可以通过`response.history`得到转发信息
+
+```
+resp = await session.get('http://example.com/some/redirect/')
+assert resp.status == 200
+assert resp.url = URL('http://example.com/some/other/url/')
+assert len(resp.history) == 1
+assert resp.history[0].status == 301
+assert resp.history[0].url = URL(
+    'http://example.com/some/redirect/')
+```
+    
+    
 
 
 ---
