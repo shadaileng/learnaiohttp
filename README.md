@@ -449,6 +449,8 @@ assert resp.history[0].url = URL(
 ---
 # 服务端
 
+## 实例
+
 ```
 def server():
 	async def handle(request):
@@ -462,9 +464,410 @@ def server():
 
 > 执行服务端程序，监听`8080`端口，根据请求返回结果
 
+## 测试
+
 ```
 # 启动服务端
 $ python3 src/0001_request.py 1
 ======== Running on http://0.0.0.0:8080 ========
 (Press CTRL+C to quit)
 ```
+
+## 一个简单的服务器
+
+> 请求处理函数`handle`必须是接收`Request`实体作为唯一参数并返回`Response`实体的协同程序。
+
+```
+async def handle(request):
+	name = request.match_info.get('name', 'shadaileng')
+	text = "hello, %s" % name
+	return web.Response(text='hello world')
+```
+
+> 创建`Application`实例，并为请求处理函数注册特定的`HTTP`方法和路径
+
+```
+app = web.Application()
+app.add_routes([web.get('/', handle), web.get('/{name}', handle)])
+```
+
+> 访问`http://localhost:8080/`可以得到返回结果
+
+> 调用`run_app()`方法启动应用。
+
+```
+web.run_app(app)
+```
+> 另一种注册路由的方法是使用路由装饰器创建路由表和注册`web`处理器
+
+```
+routes = web.RouteTableDef()
+
+@routes.get('/')
+async def handle(request):
+	return web.Response(text='hello world')
+app = web.Application()
+app.add_routes(routes)
+web.run_app(app)
+```
+## 命令行接口(CLI)
+
+> `aiohttp.web`实现了一个基本的命令行接口，通过`TCP/IP`协议快速提供应用开发服务。
+
+```
+$ python -m aiohttp.web -H localhost -P 8080 package.module:init_server
+```
+
+> `package.module:init_server`是一个可导入可执行对象，可以接收任何未解析的参数列表并返回设置完成的`Application`实体
+
+```
+def init_server(arg):
+	app = web.Application()
+	app.router.add_get('/', handle)
+	return app
+```
+
+## 处理函数
+
+> 请求处理函数`handle`必须是接收`Request`实体作为唯一参数并返回`StreamResponse`子类(如`Response`)实体的协同程序。
+
+```
+async def handle(request):
+	return web.Response()
+```
+
+> 调用`Application.add_routes()`函数路由列表，列表元素是特定`HTTP`函数(`get()`或`post()`)和路径的路由
+
+```
+app = web.Application()
+app.add_routes([web.get('/', handle), web.post('/post', handle), web.put('/put', handle)])
+```
+
+> 使用路由修饰器
+
+```
+routes = web.RouteTableDef()
+
+@routes.get('/')
+async def get_handle(request):
+	return web.Response()
+
+@routes.post('/')
+async def post_handle(request):
+	return web.Response()
+
+
+@routes.put('/')
+async def put_handle(request):
+	return web.Response()
+	
+app.add_routes(routes)
+```
+
+> 使用通配符`HTTP`函数
+
+```
+app.add_routes([web.route('*', '/', handle)])
+```
+
+## 路由和资源
+
+> 路由是一个资源列表，通过调用`web`处理函数处理`HTTP`方法
+
+> 资源是路由表中请求`URL`对应的实体，资源至少有一个对应的路由
+
+> 同一路径所有HTTP方法的路由会合并为唯一资源。
+
+> 指向资源的路径是可变的，路径中使用`{identify}`占位符，处理函数中读取匹配参数`Request.match_info`
+
+```
+@routes.get('/{name}')
+async def variable_handler(request):
+    return web.Response(
+        text="Hello, {}".format(request.match_info['name']))
+```
+
+> 占位符中可以使用正则表达式`{identifier:regex}`
+
+> 路由命名,从路由表中取出路由，并为资源构建`URL`
+
+```
+@routes.get('/root', name='root')
+async def handler(request):
+	route =request.app.router['root']
+	url = route.url_for().with_query({"a": 1, "b": 2})
+	assert(url == URL('/root?a=1&b=2'))
+	return web.Response(text="Hello"))
+```
+
+> 如果路径中有占位符需要先指定占位符的值，`route.url_for(name=val)`
+
+```
+@routes.get('/root/{name}', name='root')
+async def varHandle(request):
+	route = request.app.router['root']
+	name = request.match_info.get('name', 'shadaileng')
+	print(route.url_for(name=name).with_query({"a": "b", "c": "d"}))
+	return web.Response(text='hello, %s' % name)
+```
+
+> 可以使用`UrlDispatcher.resources()`方法查看路由器中的所有注册资源
+
+```
+for resource in app.router.resources():
+    print(resource)
+```
+
+> 可以使用UrlDispatcher.named_resources（）方法查看使用名称注册的资源子集
+
+```
+for name, resource in app.router.named_resources().items():
+    print(name, resource)
+```
+
+## Handler类
+
+> 在类中组织`handle`函数
+
+```
+class Handler:
+	def __init__(self):
+		pass
+	async def handle_get(self, request):
+		return web.Response(text="hello get")
+	
+	async def handle_post(self, request):
+		return web.Response(text="hello post")
+
+handle = Handler()
+app = web.Application()
+app.add_routes([web.get('/get', handle.handle_get), web.get('/post', handle.handle_post)])
+```
+
+## 基于视图的类
+
+> `aiohttp.web`支持基于视图的类，`web.View`的派生类和处理请求的函数，
+
+```
+class MyView(web.View):
+    async def get(self):
+        return await get_resp(self.request)
+
+    async def post(self):
+        return await post_resp(self.request)
+```
+
+> 注册路由
+
+```
+web.view('/path/to', MyView)
+```
+> 或者
+
+```
+@routes.view('/path/to')
+class MyView(web.View):
+    ...
+```
+
+## 返回`JSON`响应
+
+> 请求处理函数返回`aiohttp.web.json_response()`
+
+```
+async def handler(request):
+    data = {'some': 'data'}
+    return web.json_response(data)
+```
+
+## 会话
+
+> `aiohttp.web`没有会话的内置概念，但是，有一个第三方库，`aiohttp_session`，它增加了会话支持
+
+```
+import asyncio
+import time
+import base64
+from cryptography import fernet
+from aiohttp import web
+from aiohttp_session import setup, get_session, session_middleware
+from aiohttp_session.cookie_storage import EncryptedCookieStorage
+
+async def handler(request):
+    session = await get_session(request)
+    last_visit = session['last_visit'] if 'last_visit' in session else None
+    text = 'Last visited: {}'.format(last_visit)
+    return web.Response(text=text)
+
+async def make_app():
+    app = web.Application()
+    # secret_key must be 32 url-safe base64-encoded bytes
+    fernet_key = fernet.Fernet.generate_key()
+    secret_key = base64.urlsafe_b64decode(fernet_key)
+    setup(app, EncryptedCookieStorage(secret_key))
+    app.add_routes([web.get('/', handler)])
+    return app
+
+web.run_app(make_app())
+```
+
+## HTTP表单
+
+> `GET`: 表单的`HTTP`函数是`GET`方法(`<form method="get">`)，使用`Request.query`得到请求数据
+
+> `POST`:表单的`HTTP`函数是`POST`方法(`<form method="post">`)，使用`Request.post()`或者`Request.multipart()`方法
+
+> `Request.post()`接受`application/x-www-form-urlencoded`和`multipart/form-data`表单的数据编码（例如`<form enctype =“multipart/form-data”>`。它将文件数据存储在临时目录中。
+如果指定了client_max_size，则会引发ValueError异常。为了提高效率，使用`Request.multipart()`，它对上传大文件（文件上传）特别有效。
+
+```
+<form action="/login" method="post" accept-charset="utf-8"
+      enctype="application/x-www-form-urlencoded">
+
+    <label for="login">Login</label>
+    <input id="login" name="login" type="text" value="" autofocus/>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" value=""/>
+
+    <input type="submit" value="login"/>
+</form>
+```
+> 服务器接受数据
+```
+async def do_login(request):
+    data = await request.post()
+    login = data['login']
+    password = data['password']
+```
+
+## 文件上传
+
+> `aiohttp.web`内置了对处理从浏览器上传的文件的支持。首先，确保`HTML <form>`元素的`enctype`属性设置为`enctype =“multipart / form-data”`。
+
+```
+<form action="/store/mp3" method="post" accept-charset="utf-8"
+      enctype="multipart/form-data">
+
+    <label for="mp3">Mp3</label>
+    <input id="mp3" name="mp3" type="file" value=""/>
+
+    <input type="submit" value="submit"/>
+</form>
+```
+
+> 然后，在请求处理程序中，您可以作为`FileField`实例访问文件输入字段。`FileField`只是该文件的一个容器以及它的一些元数据：
+
+```
+async def store_mp3_handler(request):
+
+    # WARNING: don't do that if you plan to receive large files!
+    data = await request.post()
+
+    mp3 = data['mp3']
+
+    # .filename contains the name of the file in string format.
+    filename = mp3.filename
+
+    # .file contains the actual file data that needs to be stored somewhere.
+    mp3_file = data['mp3'].file
+
+    content = mp3_file.read()
+
+    return web.Response(body=content,
+                        headers=MultiDict(
+                            {'CONTENT-DISPOSITION': mp3_file}))
+```
+
+> 分块读取上传文件
+
+```
+async def store_mp3_handler(request):
+
+    reader = await request.multipart()
+
+    # /!\ Don't forget to validate your inputs /!\
+
+    # reader.next() will `yield` the fields of your form
+
+    field = await reader.next()
+    assert field.name == 'name'
+    name = await field.read(decode=True)
+
+    field = await reader.next()
+    assert field.name == 'mp3'
+    filename = field.filename
+    # You cannot rely on Content-Length if transfer is chunked.
+    size = 0
+    with open(os.path.join('/spool/yarrr-media/mp3/', filename), 'wb') as f:
+        while True:
+            chunk = await field.read_chunk()  # 8192 bytes by default.
+            if not chunk:
+                break
+            size += len(chunk)
+            f.write(chunk)
+
+    return web.Response(text='{} sized of {} successfully stored'
+                             ''.format(filename, size))
+```
+
+## WebSockets
+
+> 请求处理函数返回`WebSocketResponse`实体，与对等设备进行通信
+
+```
+async def websocket_handler(request):
+
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    async for msg in ws:
+        if msg.type == aiohttp.WSMsgType.TEXT:
+            if msg.data == 'close':
+                await ws.close()
+            else:
+                await ws.send_str(msg.data + '/answer')
+        elif msg.type == aiohttp.WSMsgType.ERROR:
+            print('ws connection closed with exception %s' %
+                  ws.exception())
+
+    print('websocket connection closed')
+
+    return ws
+```
+
+## 转向
+
+> 将用户重定向到另一个端点 - 使用绝对URL，相对URL或视图名称（来自路由器的参数）来引发HTTPFound：
+
+```
+async def handler(request):
+    location = request.app.router['login'].url_for()
+    raise web.HTTPFound(location=location)
+router.add_get('/handler', handler)
+router.add_get('/login', login_handler, name='login')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

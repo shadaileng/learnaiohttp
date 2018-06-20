@@ -57,8 +57,34 @@ def server():
 		rep = web.Response(body=json.dumps({'status': 'ok'}, ensure_ascii=False, default=lambda o: o.__dict__).encode('utf-8'))
 		rep.content_type = 'text/json;charset=utf-8'
 		return rep
+	
+	routes = web.RouteTableDef()
+	@routes.get('/root/{name}', name='root')
+	async def varHandle(request):
+		route = request.app.router['root']
+		name = request.match_info.get('name', 'shadaileng')
+		print(route.url_for(name=name).with_query({"a": "b", "c": "d"}))
+		return web.Response(text='hello, %s' % name)
+	
+	@routes.get('/ws')
+	async def websocket_handle(request):
+		wc = web.WebSocketResponse()
+		await wc.prepare(request)
+		async for msg in ws:
+			if msg.type == aiohttp.WSMsgType.TEXT:
+				if msg.data == 'clone':
+					await wc.close
+				else:
+					await wc.send_str(wc.data + '/answer')
+			elif msg.type == aiohttp.WSMsgType.ERROR:
+				print('closed exception: %s' % wc.exception)
+		print('close')
+		return wc
+	
+	
 	app = web.Application()
-	app.add_routes([web.get('/', handle), web.get('/{name}', handle), web.post('/json', json_req_rsp)])
+	app.add_routes([web.get('/handle', handle), web.get('/handle/{name}', handle), web.post('/json', json_req_rsp)])
+	app.add_routes(routes)
 	web.run_app(app)
 
 
